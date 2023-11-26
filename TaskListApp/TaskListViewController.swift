@@ -8,7 +8,8 @@
 import UIKit
 
 final class TaskListViewController: UITableViewController {
-	private let viewContext = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
+    private let storageManager = StorageManager.shared
+    private var task: Task! = nil
 	
 	private let cellID = "task"
 	private var taskList: [Task] = []
@@ -52,16 +53,6 @@ private extension TaskListViewController {
 		navigationController?.navigationBar.tintColor = .white
 	}
 	
-	func fetchData() {
-		let fetchRequest = Task.fetchRequest()
-		
-		do {
-			taskList = try viewContext.fetch(fetchRequest)
-		} catch {
-			print("Faild to fetch data", error)
-		}
-	}
-	
 	func showAlert(with title: String, and message: String) {
 		let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
 		
@@ -80,23 +71,39 @@ private extension TaskListViewController {
 		
 		present(alert, animated: true)
 	}
+    
+    private func fetchData() {
+        storageManager.fetchData { tasks in
+            if let firstTask = tasks.first {
+                task = firstTask
+            }
+        }
+    }
 	
-	func save(_ taskName: String) {
-		let task = Task(context: viewContext)
-		task.title = taskName
-		taskList.append(task)
-		
-		let indexPath = IndexPath(row: taskList.count - 1, section: 0)
-		tableView.insertRows(at: [indexPath], with: .automatic)
-		
-		if viewContext.hasChanges {
-			do {
-				try viewContext.save()
-			} catch {
-				print(error)
-			}
-		}
-	}
+    func save(_ taskName: String) {
+        let task = Task(context: storageManager.context)
+        task.title = taskName
+        taskList.append(task)
+        
+        let indexPath = IndexPath(row: taskList.count - 1, section: 0)
+        tableView.insertRows(at: [indexPath], with: .automatic)
+        
+        storageManager.saveContext()
+    }
+    
+    func updateTask(_ title: String) {
+        
+        let indexPath = IndexPath(row: title.count - 1, section: 0)
+        let task = taskList[indexPath.row]
+        task.title = title
+        
+        taskList.remove(at: indexPath.row)
+        taskList.insert(task, at: indexPath.row)
+        tableView.reloadRows(at: [indexPath], with: .automatic)
+        storageManager.update(task)
+        
+        tableView.reloadData()
+    }
 }
 
 extension TaskListViewController {
@@ -111,8 +118,16 @@ extension TaskListViewController {
 		var content = cell.defaultContentConfiguration()
 		content.text = task.title
 		cell.contentConfiguration = content
-		
+        
 		return cell
 	}
+    
+    override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
+        if editingStyle == .delete {
+            taskList.remove(at: indexPath.row)
+            tableView.deleteRows(at: [indexPath], with: .fade)
+        } else if editingStyle == .insert {
+        }
+    }
 }
 
